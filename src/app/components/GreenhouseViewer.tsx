@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { Button } from "./ui/button";
 
 export function GreenhouseViewer({ onBack }: { onBack?: () => void }) {
@@ -38,13 +39,33 @@ export function GreenhouseViewer({ onBack }: { onBack?: () => void }) {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Ensure correct color management for glTF PBR materials
+    // three r182 uses outputColorSpace (replaces outputEncoding)
+    // Also apply filmic tone mapping for better visibility
+    // and enable physically correct lights
+    // Note: keep exposure conservative to avoid washout
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.physicallyCorrectLights = true;
     container.appendChild(renderer.domElement);
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    hemi.position.set(0, 20, 0);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
     dir.position.set(5, 10, 5);
+    dir.castShadow = false;
     scene.add(dir);
+
+    // Lightweight environment map improves PBR materials brightness
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envTex;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enablePan = true;
